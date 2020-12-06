@@ -5,9 +5,9 @@
     <TargetFramework>netcoreapp3.1</TargetFramework>
     <AssemblyName>xds-producer</AssemblyName>
     <RootNamespace>XDS.Producer</RootNamespace>
-    <AssemblyVersion>1.0.99.0</AssemblyVersion>
-    <FileVersion>1.0.99.0</FileVersion>
-    <Version>1.0.99</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <Version>1.0.0</Version>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Authors>XDS Purple Productions</Authors>
     <Company>n/a</Company>
