@@ -1,0 +1,7 @@
+{
+  "profiles": {
+    "XDS.Producer": {
+      "commandName": "Project"
+    }
+  }
+}

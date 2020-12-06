@@ -1,0 +1,3 @@
+[submodule "xds-suppport-for-NBitcoin"]
+	path = xds-suppport-for-NBitcoin
+	url = https://github.com/xds-playgrounds/xds-suppport-for-NBitcoin.git
