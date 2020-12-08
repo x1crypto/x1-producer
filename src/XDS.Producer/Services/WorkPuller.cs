@@ -94,6 +94,18 @@ namespace XDS.Producer.Services
 
         async Task EnsureMineToAddresses()
         {
+            var mineToAddresses = new List<BitcoinWitPubKeyAddress>();
+
+            if (this.appConfiguration.MineToAddress != null)
+            {
+                mineToAddresses.Add(this.appConfiguration.MineToAddress);
+                this.logger.LogInformation($"Mining to address {this.appConfiguration.MineToAddress} (set in xds-producer.config).");
+                AddressCache.SetMineToAddresses(mineToAddresses);
+                return;
+            }
+
+            this.logger.LogInformation("Trying to extract mine-to-addresses from the wallet. The wallet must contain at least one unspent output.");
+
             while (true)
             {
                 try
@@ -107,7 +119,11 @@ namespace XDS.Producer.Services
                         .Where(x => x.address != null)
                         .DistinctBy(x => x.address).ToArray();
 
-                    List<BitcoinWitPubKeyAddress> mineToAddresses = new List<BitcoinWitPubKeyAddress>();
+                    if (unspentOutputs.Length == 0)
+                    {
+                        throw new InvalidOperationException($"Unable to extract addresses for mining from the wallet because it doesn't contain unspent outputs. " +
+                                             $"You can set an address in xds-producer config: minetoaddress=xds1...");
+                    }
 
                     bool useMiningLabelPrefix = unspentOutputs.Any(x => HasMiningLabelPrefix(x.label));
                     this.logger.LogInformation(useMiningLabelPrefix

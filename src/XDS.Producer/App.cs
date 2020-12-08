@@ -3,13 +3,13 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using IniParser;
 using IniParser.Model;
 using IniParser.Parser;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using NBitcoin;
 using XDS.Producer.Domain.RPC;
 using XDS.Producer.Mining;
 using XDS.Producer.Services;
@@ -56,11 +56,11 @@ namespace XDS.Producer
 
         public static DirectoryInfo SelectDataDirRoot()
         {
-            var di = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
-                ? new DirectoryInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "XDS-Producer")) 
+            var di = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                ? new DirectoryInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "XDS-Producer"))
                 : new DirectoryInfo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Personal), ".xds-producer"));
 
-            if(!di.Exists)
+            if (!di.Exists)
                 di.Create();
 
             return di;
@@ -73,9 +73,9 @@ namespace XDS.Producer
             return $"{fvi.ProductName} v.{fvi.ProductVersion}";
         }
 
-        internal static void UpdateNodeServices(string clientId, DirectoryInfo dataDirRoot, string passphrase, string rpcHost, int rpcPort, string rpcUsr, string rpcPassword, bool mine, bool stake)
+        internal static void UpdateNodeServices(string clientId, DirectoryInfo dataDirRoot, string passphrase, string rpcHost, int rpcPort, string rpcUsr, string rpcPassword, bool mine, bool stake, BitcoinWitPubKeyAddress minetoaddress)
         {
-            var nodeServices = (AppConfiguration) App.ServiceProvider.GetService<IAppConfiguration>();
+            var nodeServices = (AppConfiguration)App.ServiceProvider.GetService<IAppConfiguration>();
             nodeServices.ClientId = clientId;
             nodeServices.DataDirRoot = dataDirRoot;
             nodeServices.Passphrase = passphrase;
@@ -85,6 +85,7 @@ namespace XDS.Producer
             nodeServices.RPCPassword = rpcPassword;
             nodeServices.Stake = stake;
             nodeServices.Mine = mine;
+            nodeServices.MineToAddress = minetoaddress;
         }
 
         public static void Configure()
@@ -104,7 +105,7 @@ namespace XDS.Producer
         {
             services.AddLogging(loggingBuilder => { loggingBuilder.AddConsole(); });
 
-            services.AddSingleton<IAppConfiguration,AppConfiguration>();
+            services.AddSingleton<IAppConfiguration, AppConfiguration>();
             services.AddSingleton<StakingService>();
 
             services.AddSingleton<WorkPuller>();
@@ -133,17 +134,22 @@ namespace XDS.Producer
                 string clientId = Environment.GetEnvironmentVariable("COMPUTERNAME") ??
                                   Environment.GetEnvironmentVariable("HOSTNAME");
 
-                string targetIp = Read(data, "targetip");
+                string targetIp = Read(data, "targetip", true, true);
                 var ip = IPAddress.Parse(targetIp);
                 var host = $"http://{ip}";
 
 
-                string targetPort = Read(data, "targetport");
-                bool mine = Read(data, "mine") == "0" ? false : Read(data, "mine") == "1" ? true : throw new InvalidOperationException("mine = 1 or mine = 0 is expected.");
-                bool stake = Read(data, "stake") == "0" ? false : Read(data, "stake") == "1" ? true : throw new InvalidOperationException("stake = 1 or stake = 0 is expected.");
-                string rpcuser = Read(data, "rpcuser");
-                string rpcpassword = Read(data, "rpcpassword");
-                App.UpdateNodeServices(clientId, dataDirRoot, null, host, int.Parse(targetPort), rpcuser, rpcpassword, mine, stake);
+                string targetPort = Read(data, "targetport", true, true);
+                bool mine = Read(data, "mine", true, true) == "0" ? false : Read(data, "mine", true, true) == "1" ? true : throw new InvalidOperationException("mine = 1 or mine = 0 is expected.");
+                bool stake = Read(data, "stake", true, true) == "0" ? false : Read(data, "stake", true, true) == "1" ? true : throw new InvalidOperationException("stake = 1 or stake = 0 is expected.");
+                string rpcuser = Read(data, "rpcuser", true, true);
+                string rpcpassword = Read(data, "rpcpassword", true, true);
+
+                BitcoinWitPubKeyAddress minetoaddress = null;
+                if (mine)
+                    minetoaddress = ReadMineToAddress(data);
+
+                App.UpdateNodeServices(clientId, dataDirRoot, null, host, int.Parse(targetPort), rpcuser, rpcpassword, mine, stake, minetoaddress);
             }
             catch (Exception e)
             {
@@ -154,17 +160,55 @@ namespace XDS.Producer
             Logger.LogInformation($"Configuration loaded from {configFilePath}.");
         }
 
-        static string Read(IniData iniData, string key)
+        static string Read(IniData iniData, string key, bool isKeyRequired, bool isValueRequired)
         {
-            var value = iniData.GetKey(key);
-            if (string.IsNullOrWhiteSpace(value))
-                throw new InvalidOperationException($"Can't find key {key} in the configuration file.");
-            return value.Trim();
+            if (iniData.TryGetKey(key, out string value))
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    if (isValueRequired)
+                        throw new InvalidOperationException(
+                            $"The key '{key}=' in xds-producer.config must have a value.");
+                    else return null;
+                }
+                return value.Trim();
+            }
+
+            if (isKeyRequired)
+                throw new InvalidOperationException($"The key '{key}=' is required in xds-producer.config");
+
+            return null;
+        }
+
+        static BitcoinWitPubKeyAddress ReadMineToAddress(IniData data)
+        {
+            string addressString = null;
+            try
+            {
+                addressString = Read(data, "minetoaddress", false, false);
+                if (string.IsNullOrWhiteSpace(addressString))
+                {
+                    Logger.LogInformation("'minetoadress=' is not set in xds-producer.config, addresses will be retrieved from the wallet.");
+                    return null;
+                }
+
+
+                var address = new BitcoinWitPubKeyAddress(addressString, C.Network);
+                return address;
+            }
+            // ReSharper disable once EmptyGeneralCatchClause
+            catch (Exception e)
+            {
+                Logger.LogCritical($"The address '{addressString}' set in xds-producer.config is invalid! {e.Message}");
+                Environment.Exit(1);
+            }
+
+            return null;
         }
 
         static void CreateConfigFileAndExit(string configFilePath)
         {
-            var parser = new IniDataParser {Configuration = {CommentString = "#", AssigmentSpacer = ""}};
+            var parser = new IniDataParser { Configuration = { CommentString = "#", AssigmentSpacer = "" } };
 
             IniData parsedData = parser.Parse("");
 
@@ -183,6 +227,9 @@ namespace XDS.Producer
             parsedData.Global.SetKeyData(new KeyData("targetport") { Value = C.Network.RPCPort.ToString(), Comments = { $"The RPC TCP port of the node you want to connect to. Default: {C.Network.RPCPort}." } });
 
             parsedData.Global.SetKeyData(new KeyData("mine") { Value = "0", Comments = { "To mine, set the value to 1, otherwise to 0." } });
+
+            parsedData.Global.SetKeyData(new KeyData("minetoaddress") { Value = "", Comments = { "#Set an XDS address for mining. If this is set, this address will be used exclusively. If this is not set, we'll try to retrieve minetoaddresses from the wallet's unspent outputs, preferring those with the prefix 'Mining'. However, the latter will not work for empty wallets." } });
+
             parsedData.Global.SetKeyData(new KeyData("stake") { Value = "0", Comments = { "To stake, set the value to 1, otherwise to 0. Staking requires targetip=127.0.0.1, i.e. the wallet and xds-producer must run on the same machine, because the keys are retrieved via a temp file." } });
 
             var config = parsedData.ToString();

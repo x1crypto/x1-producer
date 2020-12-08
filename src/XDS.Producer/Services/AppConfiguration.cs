@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using NBitcoin;
+using System.IO;
 using System.Threading;
 
 namespace XDS.Producer.Services
@@ -24,5 +25,7 @@ namespace XDS.Producer.Services
         public bool Mine { get; internal set; }
 
         public bool Stake { get; internal set; }
+
+        public BitcoinWitPubKeyAddress MineToAddress { get;  set; }
     }
 }
