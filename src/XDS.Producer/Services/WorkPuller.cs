@@ -216,7 +216,7 @@ namespace XDS.Producer.Services
 
                     if (this.appConfiguration.Mine)
                     {
-                        this.minerCoordinator.NotifyBlockTemplateReceived();
+                        this.minerCoordinator.NotifyBlockTemplateReceived(blockTemplate.height % 2 != 0);
                     }
 
                 }

@@ -67,13 +67,16 @@ namespace XDS.Producer.Mining
             isCancelled = false;
         }
 
-        public void NotifyBlockTemplateReceived()
+        public void NotifyBlockTemplateReceived(bool isPowAllowed)
         {
             // this should not block the WorkPuller, and CancelWaitResume can take a while to return
             Task.Run(() =>
             {
                 CancelWaitResume();
 
+                if(!isPowAllowed)
+                    return;
+                
                 var minerContexts = CreateMinerContexts(this.deviceController.MinerAdapter.InstancesCount);
 
                 foreach (var context in minerContexts)

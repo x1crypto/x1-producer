@@ -126,7 +126,7 @@ namespace XDS.Producer.Staking
         bool EnsureBlockTemplate()
         {
             this.BlockTemplate = this.blockTemplateCache.GetClonedBlockTemplateLocked();
-            return this.BlockTemplate != null;
+            return this.BlockTemplate != null && this.BlockTemplate.height % 2 == 0;
         }
 
         (int outputs, int found) Stake()
@@ -169,7 +169,7 @@ namespace XDS.Producer.Staking
                     validKernels.Add(c);
                     break;
                 }
-                   
+
             }
             return validKernels;
         }
