@@ -1,2 +1,2 @@
-# xds-producer
-Mining and staking for XDS, via getblocktemplate/submitblock.
+# x1-producer
+Mining and staking for X1, via getblocktemplate/submitblock.
