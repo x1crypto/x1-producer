@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net;
@@ -73,7 +74,7 @@ namespace X1.Producer
             return $"{fvi.ProductName} v.{fvi.ProductVersion}";
         }
 
-        internal static void UpdateNodeServices(string clientId, DirectoryInfo dataDirRoot, string passphrase, string rpcHost, int rpcPort, string rpcUsr, string rpcPassword, bool mine, bool stake, BitcoinWitPubKeyAddress minetoaddress)
+        internal static void UpdateNodeServices(string clientId, DirectoryInfo dataDirRoot, string passphrase, string rpcHost, int rpcPort, string rpcUsr, string rpcPassword, bool mine, bool stake, BitcoinWitPubKeyAddress minetoaddress, List<int> disabledIndices)
         {
             var nodeServices = (AppConfiguration)App.ServiceProvider.GetService<IAppConfiguration>();
             nodeServices.ClientId = clientId;
@@ -86,6 +87,7 @@ namespace X1.Producer
             nodeServices.Stake = stake;
             nodeServices.Mine = mine;
             nodeServices.MineToAddress = minetoaddress;
+            nodeServices.DisabledDeviceIndices = disabledIndices ?? new List<int>();
         }
 
         public static void Configure()
@@ -146,10 +148,27 @@ namespace X1.Producer
                 string rpcpassword = Read(data, "rpcpassword", true, true);
 
                 BitcoinWitPubKeyAddress minetoaddress = null;
-                if (mine)
-                    minetoaddress = ReadMineToAddress(data);
+                List<int> disabledIndices = new List<int>();
 
-                App.UpdateNodeServices(clientId, dataDirRoot, null, host, int.Parse(targetPort), rpcuser, rpcpassword, mine, stake, minetoaddress);
+                if (mine)
+                {
+                    minetoaddress = ReadMineToAddress(data);
+                    // read disabled mining devices if any
+                    string disable = Read(data, "disable", false, false);
+                    if (!string.IsNullOrWhiteSpace(disable))
+                    {
+                      
+                        string[] maybeIds = disable.Split(",");
+                        foreach (var s in maybeIds)
+                        {
+                            if(int.TryParse(s,out int number))
+                                disabledIndices.Add(number);
+                        }
+                    }
+                }
+                   
+
+                App.UpdateNodeServices(clientId, dataDirRoot, null, host, int.Parse(targetPort), rpcuser, rpcpassword, mine, stake, minetoaddress, disabledIndices);
             }
             catch (Exception e)
             {
@@ -231,6 +250,8 @@ namespace X1.Producer
             parsedData.Global.SetKeyData(new KeyData("minetoaddress") { Value = "", Comments = { "#Set an X1 address for mining. If this is set, this address will be used exclusively. If this is not set, we'll try to retrieve minetoaddresses from the wallet's unspent outputs, preferring those with the prefix 'Mining'. However, the latter will not work for empty wallets." } });
 
             parsedData.Global.SetKeyData(new KeyData("stake") { Value = "0", Comments = { "To stake, set the value to 1, otherwise to 0. Staking requires targetip=127.0.0.1, i.e. the wallet and X1-producer must run on the same machine, because the keys are retrieved via a temp file." } });
+
+            parsedData.Global.SetKeyData(new KeyData("disable") {Comments = {"Add device indexes that should not be used for mining here, e.g. disable=0,2 to disable device 0 and device 2."}});
 
             var config = parsedData.ToString();
 

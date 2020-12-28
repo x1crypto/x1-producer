@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using NBitcoin;
 
@@ -25,6 +26,8 @@ namespace X1.Producer.Services
         public bool Mine { get; internal set; }
 
         public bool Stake { get; internal set; }
+
+        public List<int> DisabledDeviceIndices { get; set; }
 
         public BitcoinWitPubKeyAddress MineToAddress { get;  set; }
     }

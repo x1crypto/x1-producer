@@ -96,6 +96,10 @@ namespace X1.Producer.Mining
 
             for (int i = 0; i < minerCount; i++)
             {
+                // if the device index is disabled by configuration, don't create MinerContext
+                if(this.appConfiguration.DisabledDeviceIndices.Contains(i))
+                    continue;
+
                 // this gets us the latest block template, including a unique extra nonce
                 var blockTemplate = this.blockTemplateCache.GetClonedBlockTemplateLocked();
 
